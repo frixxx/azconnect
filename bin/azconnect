@@ -1,0 +1,44 @@
+#!/usr/bin/env zsh
+
+CONFIG_PATH="${HOME}/.config/fx/azconnect"
+RESOURCES_FILE="${CONFIG_PATH}/resources"
+
+# =======> check if required resources are available
+[[ -f "$RESOURCES_FILE" ]] || {
+  echo "You have no azure resources defined. ($RESOURCES_FILE file missing)  Aborting."
+  exit 1
+}
+
+# =======> Select Stage
+echo ""
+echo "Select stage:"
+stages=(`cat $RESOURCES_FILE|jq -r "map(.stage) | unique | sort | .[]"`)
+simple-select "${stages[@]}"
+selectedStage="${stages[@]:$?:1}"
+
+# =======> Select Service
+echo ""
+echo "Select service:"
+services=(`cat $RESOURCES_FILE|jq -r ".[] | select(.stage == \"$selectedStage\") | .name"`)
+simple-select "${services[@]}"
+selectedService="${services[@]:$?:1}"
+
+# =======> Get Configs
+subscription=`cat $RESOURCES_FILE|jq -r ".[] | select(.stage == \"$selectedStage\") | select(.name == \"$selectedService\") | .subscription"`
+resource_group=`cat $RESOURCES_FILE|jq -r ".[] | select(.stage == \"$selectedStage\") | select(.name == \"$selectedService\") | .resourceGroup"`
+
+# =======> Start Service
+echo ""
+echo "Starting service: $selectedService"
+
+port=$(jot -r 1 2000 65000)
+echo "Using local ssh port: $port"
+echo ""
+
+azkill $selectedService
+az account show || az login
+az webapp create-remote-connection --subscription $subscription --resource-group $resource_group -n $selectedService --port $port &
+sleep 15
+sshpass -p 'Docker!' ssh -o StrictHostKeyChecking=no -p $port root@localhost
+ssh-keygen -R "[localhost]:$port"
+azkill $selectedService

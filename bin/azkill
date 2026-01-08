@@ -1,0 +1,7 @@
+#!/usr/bin/env zsh
+
+selectedService=$1
+psAuxReturn="ps aux|grep \"az webapp\"|grep -v \"grep\"|grep \"$selectedService\"|awk '{print \$2}'"
+pid=`eval $psAuxReturn`
+
+[[ -z $pid ]] || kill $pid
